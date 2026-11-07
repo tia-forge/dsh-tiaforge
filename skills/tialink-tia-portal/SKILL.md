@@ -2,9 +2,9 @@
 name: tialink-tia-portal
 slug: tialink-tia-portal
 displayName: 博途 AI 自动化（TiaLink）
-version: 1.0.7
-summary: 让 AI 直接操作西门子博途（TIA Portal V19/V20）工程：组态机架与网络、建 FB/FC/DB 并写 SCL、编译、下载到 PLCSIM 仿真、读回核对。含前置自查与失败判读，不靠猜。
-description: 操作西门子 TIA Portal（博途/博图，V19/V20）工程：配置硬件与网络、创建 FB/FC/DB/UDT 并写 SCL、编译、下载到 S7-PLCSIM 仿真、读回核对。当用户提到博途、博图、TIA Portal、西门子 PLC 自动化、SCL 编程、机架组态、Openness，或要把 PLC 工程交给 AI 操作时使用。需要本机已装 TiaLink 网关（付费软件，未授权时只读）。
+version: 1.0.9
+summary: 让 AI 直接操作西门子博途（TIA Portal V19 / V20 / V21）工程：组态机架与网络、建 FB/FC/DB 并写 SCL、编译、下载到 PLCSIM 仿真、读回核对，也能只读地把老工程反推成 IO 表 / 接口表 / 调用关系文档包。含前置自查与失败判读，不靠猜。
+description: 操作西门子 TIA Portal（博途/博图，V19 / V20 / V21）工程：配置硬件与网络、创建 FB/FC/DB/UDT 并写 SCL、编译、下载到 S7-PLCSIM 仿真、读回核对；只读地把老工程反推成可交付文档包（IO 表、块清单、接口表、调用关系、变量与 UDT 表）。当用户提到博途、博图、TIA Portal、西门子 PLC 自动化、SCL 编程、机架组态、Openness、读懂/梳理老工程、PLC 项目文档，或要把 PLC 工程交给 AI 操作时使用。需要本机已装 TiaLink 网关（付费软件，未授权时只读）。
 license: CC-BY-4.0
 tags: [博途, 博图, TIA Portal, SCL, 西门子, PLC, Openness, 自动化]
 homepage: https://tia.hubwiz.com/tia-link?utm_source=dsh&utm_medium=plugin
@@ -12,8 +12,8 @@ metadata:
   publisher: 汇智网 (hubwiz.com)
   homepage: https://tia.hubwiz.com/tia-link?utm_source=dsh&utm_medium=plugin
   repository: https://github.com/tia-forge/tialink
-  requires: TiaLink 网关（Windows + 博途 V19/V20 + Openness 用户组）
-  supported-tia-versions: V19, V20
+  requires: TiaLink 网关（Windows + 博途 V19 / V20 / V21 + Openness 用户组；V21 需 TiaLink 1.5.0+）
+  supported-tia-versions: V19, V20, V21
   transport: MCP Streamable HTTP（/mcp + Bearer）
 ---
 
@@ -51,7 +51,7 @@ AI 客户端 ──MCP(Streamable HTTP, /mcp + Bearer)──► TiaLink 网关 �
 | 是 | 不是 |
 |---|---|
 | 一个 **MCP 网关**，任何支持 Streamable HTTP + Bearer 的客户端都能用 | ❌ 不是某个 AI 厂商的插件，不绑定 Claude / WorkBuddy / DeepSeek |
-| 需要 **本机装了博途 V19 或 V20**（V21 暂不支持） | ❌ 不是云端服务，不能"上传 .ap19 帮你改" |
+| 需要 **本机装了博途 V19 / V20 / V21** | ❌ 不是云端服务，不能"上传 .ap19 帮你改" |
 | **未授权也能只读**：连上就能读工程、读块、读硬件树 | ❌ 不替你做安全设计，不碰安全回路 |
 
 ---
@@ -66,7 +66,7 @@ AI 客户端 ──MCP(Streamable HTTP, /mcp + Bearer)──► TiaLink 网关 �
 
 | # | 硬条件 | 怎么验（不用装东西） |
 |---|---|---|
-| 1 | Windows 64 位，**已装且已授权** 博途 **V19 或 V20** | 打开博途 → 帮助 → 关于；版本号必须是 V19.x / V20.x。**V21 不支持，不要试** |
+| 1 | Windows 64 位，**已装且已授权** 博途 **V19 / V20 / V21** | 打开博途 → 帮助 → 关于；版本号必须是 V19.x / V20.x / V21.x |
 | 2 | 运行网关的 **Windows 账号在本地 `Siemens TIA Openness` 用户组** | `whoami` 拿到账号 → 计算机管理 → 本地用户和组 → 组 → `Siemens TIA Openness` → 成员里有它。**没有这一条，Openness 一律报授权错误** |
 | 3 | 客户端与网关之间 **TCP 端口可达**（示例用 `8080`） | 客户端机器上 `curl -sS -o /dev/null -w "%{http_code}\n" http://<网关IP>:8080/mcp` —— 返回 **4xx 也算通**（说明网络到了，只是缺 token/路径）；`Connection refused` / 超时才是网络问题 |
 | 4 | 客户端支持 **Streamable HTTP 且能发 `Authorization: Bearer`** | 只能跑 stdio 的客户端 → 用第 1 节的 `tialink-mcp` 适配器 |
@@ -170,7 +170,7 @@ curl -sS -X POST "http://192.168.1.78:8080/mcp" \
 
 ---
 
-## 3. 四条常用工作流（动作序列 + 验收物）
+## 3. 五条常用工作流（动作序列 + 验收物）
 
 ### 3.1 机架与硬件组态
 
@@ -215,6 +215,46 @@ curl -sS -X POST "http://192.168.1.78:8080/mcp" \
 编译 → 保存 → 导出块/工程 → 归档 → 读回归档产物路径与大小。
 用途：交付前留档、版本对比、"改了什么"取证。
 
+### 3.5 逆向文档：把老工程反推成可交付文档包
+
+目标是**能被复核的五张表**，不是一段介绍文字。全程只用读与导出，**不改工程**（未授权的只读网关也能做）。
+
+| # | 产物 | 数据来源 | 每行必须有 |
+|---|---|---|---|
+| 1 | IO 表 | 硬件树 + 模块 I/O 地址 + 变量表 | 站 / 槽 / 型号 / 订货号 / 地址 / 信号名 / 注释 |
+| 2 | 块清单 | 读块目录 | 名称 / 类型（FB·FC·DB·OB）/ 编号 / 语言 / 是否多重实例 |
+| 3 | 接口表 | 逐块读接口 | 名称 / 方向（Input·Output·InOut·Temp·Static）/ 类型 / 初值 |
+| 4 | 调用关系 | 逐块读交叉引用 | 调用者 → 被调用者；**未定义引用单列** |
+| 5 | 变量与 UDT 表 | 读变量表 + UDT | 名称 / 类型 / 地址 / 注释；UDT 成员展开到叶子 |
+
+三条硬规则：
+
+1. **每行带证据**：`工程名 › 块名 › 工具返回的原文片段`。读不到就写"未读到"，不许补全。
+2. **不猜语义**：注释缺失的块只写"读了什么 / 写了什么 / 被谁调用"；要下业务结论，单独放「推测（待人工确认）」一节。
+3. **先快照再动工**：导出 + 归档，记路径 / 大小 / sha256 / 时间戳，作为后续 diff 的基线；文档末尾注明"依据 <时间> 的导出快照"。
+
+提示词模板：
+
+```text
+只读，不要改工程。工程 <名>，按顺序产出五张表：IO 表、块清单、接口表、调用关系、变量与 UDT 表。
+要求：
+1) 每行都要带证据：工程名 › 块名 › 读到的原文片段；读不到写"未读到"，禁止推测；
+2) 注释缺失的块，只写读了什么、写了什么、被谁调用，不写业务含义；
+3) 五张表出完后，单独列三节：没有任何调用者的块、未定义引用、块类型分布与总数；
+4) 文末给五张表的行数、导出快照路径与 sha256。
+```
+
+交人前的四道自查：
+
+| 检查 | 判据 | 不过怎么办 |
+|---|---|---|
+| 块数对得上 | 表里块数 == 读块目录返回的条数 | 差一个就重读那一块，别手补 |
+| 接口没漏 | 抽 3 个块，逐字段比对读回结果 | 漏字段 → 重读该块 |
+| 调用关系闭合 | 每个被调用者都能在调用者里找到 | 找不到 = 动态调用或未定义引用，单列说明 |
+| 快照可复核 | 同参数再导一次，sha256 一致 | 不一致 = 工程被改过，重做基线 |
+
+**边界**：TiaLink 出的是**结构化原料**。逐网络注释、带图排版、符号表报表这类**成品级文档**属于博途 Add-In `REVERSE-DOCS`，本技能不含该插件、也不替它转发；AI 只负责把原料摆整齐，**结论必须人工签字**。
+
 ---
 
 ## 4. 失败判读（对照着看，别重启乱试）
@@ -226,7 +266,7 @@ curl -sS -X POST "http://192.168.1.78:8080/mcp" \
 | `404` | 路径不是 `/mcp` | 补全路径 |
 | 连上了但工具列表是空的 | 客户端缓存了旧列表 | 重启客户端；确认支持 Streamable HTTP |
 | Openness 报授权 / "not permitted" | 账号不在 `Siemens TIA Openness` 组 | 加入组 → **注销重登**（组权限要重开会话才生效） |
-| 报版本相关错误 | 网关与博途版本不匹配 | 确认是 V19/V20；V21 不支持 |
+| 报版本相关错误 | 网关与博途版本不匹配 | 确认是 V19 / V20 / V21（V21 需 TiaLink 1.5.0+） |
 | 仿真/下载类工具失败 | PLCSIM Advanced 未装、未起、无虚拟实例、PC/PG 接口选错 | 起实例 → 选虚拟网卡 → 重试 |
 | 编译/下载调用超时 | 默认超时 600s，编译慢是正常的 | **不要**把超时降到聊天级别；等 |
 | 重启后全挂 | 网关没注册成服务，博途未就绪 | 先起博途，再起网关 |
