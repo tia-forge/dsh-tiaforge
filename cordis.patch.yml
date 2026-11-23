@@ -3,68 +3,102 @@
 # 由 dsh.profile.bundles 依序应用；后应用的行按 id 覆盖前面的行。
 # 本层只插入新行，不改任何已有行，因此与 dsh-base / web-app 的升级兼容性最好。
 #
-# 所有 MCP 行都设 failOnStartupError: false —— 端点没起来（本机没装 TiaLink、
+# ── 端点为什么长这样（2026-11-24 改）────────────────────────────────────────
+# 值走**凭据引用** `${credential:NAME}`，不再用 `!!js process.env.X`：
+#   · 值来自 $DSH_HOME/.credentials.yaml（默认），凭据库 watch 着这个文件——
+#     改完保存，25 秒内端点重连，**不用重启 dsh**（rc.5 实测）；
+#   · 解析顺序自动兜底：托管文件 > 启动环境 > 项目 .env > $DSH_HOME/.env，
+#     所以老用户 `export TIA_DOCS_KEY=…` 照旧有效，零迁移；
+#   · 缺 Key 时实例进入 waiting-credentials：不注册工具、**不消耗重连次数、不打 401**；
+#   · expandTemplates 打开后，诊断与工具失败里的值统一替换成 [redacted]。
+#   · 每行都声明 `inject: [credentials]`——没有它，dsh 并发激活时 mcp 行可能先于
+#     凭据服务就绪，报「MCP credential templates require a credentials provider」并丢掉整行。
+#     官方 mcp-manager 也是这么写的（dsh-base 的 `- id: mcp-manager` 有同样一行）。
+# 改 URL / Key 的正规姿势：`npx dsh-tiaforge-setup`（本地回环表单），或直接编辑上面那个 YAML 的 refs: 分节。
+#
+# 五个 URL 的默认值由 index.js 在首次启动时幂等播种（已存在就不动），
+# 所以这里可以只写引用；想停用某个端点就删掉它的 Key，不要删 URL。
+#
+# 所有 MCP 行都设 failOnStartupError: false —— 端点没起来（没装 TiaLink、
 # 没配 API Key）时，插件仍然加载，只是不出现对应工具，不会拖垮整个 profile。
 
 - insert:
     # ① 技能：本包 index.js 读取 skills/*/SKILL.md 并注册进 ctx.skills
+    #    同时负责播种五个 URL 默认值、打印就绪诊断
     - id: tiaforge-skills
       name: dsh-tiaforge
 
-    # ② TiaLink —— 本机网关（博途同机）。未授权时只读可用。
+    # ② TiaLink —— 本机网关（博途同机）。
+    #    ⚠️ 这一行**故意不带 Authorization**：网关的令牌是可选的（只读不需要；写入/许可功能才要）。
+    #    带 `${credential:TIALINK_TOKEN}` 的话，没令牌会进 waiting-credentials → 连只读都连不上。
+    #    填了令牌的部署，由插件在 `$DSH_HOME/cordis.patch.yml` 写一段带 Authorization 的覆盖
+    #    （标记块 `# >>> dsh-tiaforge: TiaLink 令牌`），那边一样是热生效。
     - id: tiaforge-mcp-tialink
       name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - credentials
       config:
         serverName: tialink
         transport: streamable-http
-        url: !!js process.env.TIALINK_URL ?? 'http://127.0.0.1:8080/mcp'
-        headers:
-          Authorization: !!js '`Bearer ${process.env.TIALINK_TOKEN ?? ""}`'
+        expandTemplates: true
+        url: ${credential:TIALINK_URL}
         toolCallTimeoutMs: 600000
         failOnStartupError: false
 
     # ③ 博途编程文档检索（2800+ 章节，get_docs）
     - id: tiaforge-mcp-docs
       name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - credentials
       config:
         serverName: tia-docs
         transport: streamable-http
-        url: https://tia.hubwiz.com/ai-coding-docs/mcp
+        expandTemplates: true
+        url: ${credential:TIA_DOCS_URL}
         headers:
-          Authorization: !!js '`Bearer ${process.env.TIA_DOCS_KEY ?? ""}`'
+          Authorization: 'Bearer ${credential:TIA_DOCS_KEY}'
         failOnStartupError: false
 
     # ④ PLC 云仿真（逐扫描 + 场景 PASS/FAIL）
     - id: tiaforge-mcp-sim
       name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - credentials
       config:
         serverName: plc-sim
         transport: streamable-http
-        url: https://tia.hubwiz.com/sim/mcp
+        expandTemplates: true
+        url: ${credential:TIA_SIM_URL}
         headers:
-          Authorization: !!js '`Bearer ${process.env.TIA_SIM_KEY ?? ""}`'
+          Authorization: 'Bearer ${credential:TIA_SIM_KEY}'
         failOnStartupError: false
 
     # ⑤ LadDoc Cloud（梯形图 JSON → 博途可导入 SimaticML）
     - id: tiaforge-mcp-laddoc
       name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - credentials
       config:
         serverName: laddoc
         transport: streamable-http
-        url: https://tia.hubwiz.com/lad/mcp
+        expandTemplates: true
+        url: ${credential:TIA_LAD_URL}
         headers:
-          Authorization: !!js '`Bearer ${process.env.TIA_LAD_KEY ?? ""}`'
+          Authorization: 'Bearer ${credential:TIA_LAD_KEY}'
         failOnStartupError: false
 
     # ⑥ 梯形图渲染（SimaticML → PNG，导入前先看一眼）
-    #    注意：这是唯一**计费**的端点 —— render_simaticml 每次扣 1 次额度（先扣后执行），
-    #    render_version 免费。没有 TIA_RENDER_KEY 时 401，工具不出现，不会白扣额度。
+    #    计费：四个云端端点一个口径 —— 新用户 100 次免费，每次调用扣 1 次额度。
+    #    没有 TIA_RENDER_KEY 时工具不出现，自然不会扣。
     - id: tiaforge-mcp-render
       name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - credentials
       config:
         serverName: lad-render
         transport: streamable-http
-        url: https://tia.hubwiz.com/render/mcp
+        expandTemplates: true
+        url: ${credential:TIA_RENDER_URL}
         headers:
-          Authorization: !!js '`Bearer ${process.env.TIA_RENDER_KEY ?? ""}`'
+          Authorization: 'Bearer ${credential:TIA_RENDER_KEY}'
         failOnStartupError: false

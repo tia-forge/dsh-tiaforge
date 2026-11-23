@@ -1,14 +1,24 @@
 {
   "name": "dsh-tiaforge",
-  "version": "0.3.2",
-  "description": "DSH 博途插件：在 DeepSeek Harness 里接西门子 TIA Portal —— 文档检索、梯形图生成与渲染、PLC 云仿真、本机网关（TiaLink）。装完看不到工具？先领 4 把 Key。",
+  "version": "0.9.5",
+  "description": "DSH 博途插件：在 DeepSeek Harness 里接西门子 TIA Portal —— 文档检索、梯形图生成与渲染、PLC 云仿真、本机网关（TiaLink）。带本地配置页（npx dsh-tiaforge-setup）：改 Key/URL 不用重启。",
   "type": "module",
   "main": "index.js",
   "files": [
     "index.js",
     "cordis.patch.yml",
-    "skills"
+    "skills",
+    "lib",
+    "bin",
+    "assets",
+    "test"
   ],
+  "bin": {
+    "dsh-tiaforge-setup": "./bin/setup.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/patch.test.mjs test/credentials-file.test.mjs test/keys.test.mjs test/setup-tools.test.mjs test/gateway-patch.test.mjs test/wording.test.mjs test/doc-lint.test.mjs"
+  },
   "keywords": [
     "dsh-plugin",
     "dsh",
@@ -25,7 +35,7 @@
     "email": "support@hubwiz.com",
     "url": "https://tia.hubwiz.com/"
   },
-  "homepage": "https://tia.hubwiz.com/?utm_source=dsh&utm_medium=plugin",
+  "homepage": "https://tia.hubwiz.com/?utm_source=npm&utm_medium=readme&utm_campaign=dsh-tiaforge",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tia-forge/dsh-tiaforge.git"
@@ -38,5 +48,8 @@
   "engines": {
     "dsh": ">=0.2.0-rc.0 <0.2.1-rc.0 || >=0.2.1-rc.0 <0.3.0",
     "node": ">=22"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0"
   }
 }

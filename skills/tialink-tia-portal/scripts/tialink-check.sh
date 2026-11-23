@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# tialink-check.sh — 只读冒烟：确认「网关可达 + 令牌可用 + 工具列表非空」
+# tialink-check.sh — 只读冒烟：确认「网关可达 + 鉴权通过（网关开了鉴权时要令牌）+ 工具列表非空」
+# 地址优先级：$1 > $TIALINK_URL > 内置默认（127.0.0.1:8080）。实际生效地址以 tiaforge_status 的 url 为准。
 #
 # 用法：
 #   sh tialink-check.sh http://192.168.1.78:8080/mcp <令牌>

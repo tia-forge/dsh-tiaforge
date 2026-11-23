@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TIA Forge · 接入配置</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --line: #262b36;
+        --text: #e6e9ef;
+        --muted: #98a2b3;
+        --accent: #4f9cf9;
+        --ok: #3fb950;
+        --warn: #d29922;
+        --bad: #f85149;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f6f7f9;
+          --panel: #ffffff;
+          --line: #e3e6ec;
+          --text: #1b1f27;
+          --muted: #5d6675;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 32px 20px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      main { max-width: 880px; margin: 0 auto; }
+      h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: 0.2px; }
+      .sub { color: var(--muted); margin: 0 0 4px; }
+      .path { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 12px;
+      }
+      .row-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+      .row-head h2 { margin: 0; font-size: 15px; }
+      .row-head .server { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .summary { color: var(--muted); margin: 2px 0 12px; font-size: 13px; }
+      .field { display: grid; grid-template-columns: 70px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+      .field label { color: var(--muted); font-size: 13px; }
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        font: inherit;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+      .row-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+      button {
+        font: inherit;
+        padding: 7px 14px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--accent); }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+      button.ghost { border: none; background: none; color: var(--muted); padding: 4px 6px; }
+      button.ghost:hover { color: var(--bad); }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 12px; padding: 3px 9px; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--muted);
+      }
+      .chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+      .chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+      .chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+      .hint { color: var(--muted); font-size: 12px; }
+      a { color: var(--accent); }
+      footer {
+        position: sticky; bottom: 0; margin-top: 16px; padding: 12px 16px;
+        background: color-mix(in srgb, var(--panel) 92%, transparent);
+        border: 1px solid var(--line); border-radius: 10px;
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        backdrop-filter: blur(6px);
+      }
+      #log { flex: 1; min-width: 220px; font-size: 13px; color: var(--muted); }
+      #log.ok { color: var(--ok); }
+      #log.bad { color: var(--bad); }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>TIA Forge · 接入配置</h1>
+      <p class="sub">填好点「保存」——约 25 秒内在 DSH 里生效，<b>不用重启</b>。留空的 Key 表示保持现状。</p>
+      <p class="path" id="path">读取中…</p>
+      <div id="rows"></div>
+      <footer>
+        <div id="log">&nbsp;</div>
+        <button id="save" class="primary">保存</button>
+      </footer>
+    </main>
+
+    <script>
+      const stateUrl = 'state'
+      const saveUrl = 'save'
+      const probeUrl = 'probe'
+
+      let state
+      const log = (text, kind) => {
+        const el = document.getElementById('log')
+        el.textContent = text
+        el.className = kind || ''
+      }
+      const chip = (kind, text) => `<span class="chip ${kind}">${text}</span>`
+
+      function keyChip(service) {
+        if (service.keyState === 'file') return chip('ok', `已配置 ${service.keyHint}`)
+        if (service.keyState === 'env') return chip('ok', `来自环境变量 ${service.keyHint}`)
+        return service.optional ? chip('warn', '未配置（可选）') : chip('bad', '未配置')
+      }
+
+      function render() {
+        document.getElementById('path').textContent = state.credentialsPath
+        const rows = document.getElementById('rows')
+        rows.innerHTML = ''
+
+        for (const service of state.services) {
+          const card = document.createElement('section')
+          card.className = 'card'
+          card.dataset.server = service.server
+          card.innerHTML = `
+            <div class="row-head">
+              <h2>${service.title}</h2>
+              <span class="server">mcp__${service.server}__*</span>
+              <span data-role="keychip">${keyChip(service)}</span>
+            </div>
+            <p class="summary">${service.summary}${
+              service.dashboard
+                ? ` · <a href="${service.dashboard}" target="_blank" rel="noreferrer">去控制台领 Key</a>`
+                : ''
+            }</p>
+            <div class="field">
+              <label>URL</label>
+              <input data-ref="${service.urlRef}" value="${escapeAttr(service.url)}" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label>${service.keyTitle}</label>
+              <input data-ref="${service.keyRef}" data-secret="1" placeholder="${
+                service.keyState === 'none' ? '粘贴 Key（留空 = 不配置）' : `已配置 ${service.keyHint}，留空不改`
+              }" spellcheck="false" autocomplete="off" />
+            </div>
+            <div class="row-actions">
+              <button data-action="probe">测试连接</button>
+              ${
+                service.keyState === 'none'
+                  ? ''
+                  : `<button class="ghost" data-action="clear" data-ref="${service.keyRef}">清除这把 Key</button>`
+              }
+              <span class="hint" data-role="probe"></span>
+            </div>`
+
+          card.querySelector('[data-action="probe"]').addEventListener('click', () => probeCard(card))
+          const clear = card.querySelector('[data-action="clear"]')
+          if (clear) {
+            clear.addEventListener('click', async () => {
+              await post(saveUrl, { updates: { [clear.dataset.ref]: null } }).then(onSaved).catch(onError)
+            })
+          }
+          rows.append(card)
+        }
+      }
+
+      function values() {
+        const updates = {}
+        for (const input of document.querySelectorAll('input[data-ref]')) {
+          const value = input.value.trim()
+          if (!value) continue
+          updates[input.dataset.ref] = value
+        }
+        return { updates }
+      }
+
+      async function post(url, body) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await response.json()
+        if (!data.ok && data.error) throw new Error(data.error)
+        return data
+      }
+
+      function onSaved(data) {
+        log(data.note ?? '已写入', 'ok')
+        if (data.path) document.getElementById('path').textContent = data.path
+        // 保存后重读状态：Key 输入框会被清空（值已进文件，不需要再显示）
+        return refresh()
+      }
+
+      function onError(error) {
+        log(error.message, 'bad')
+      }
+
+      async function probeCard(card) {
+        const url = card.querySelector('input[data-ref$="_URL"]').value.trim()
+        const keyInput = card.querySelector('input[data-secret]')
+        const target = card.querySelector('[data-role="probe"]')
+        target.textContent = '测试中…'
+        try {
+          const data = await post(probeUrl, { url, key: keyInput.value.trim() })
+          if (data.ok) {
+            target.textContent = `✓ ${data.note ?? '握手成功'}（HTTP ${data.status}）`
+            target.style.color = 'var(--ok)'
+          } else {
+            target.textContent = `✗ ${data.error}`
+            target.style.color = 'var(--bad)'
+          }
+        } catch (error) {
+          target.textContent = `✗ ${error.message}`
+          target.style.color = 'var(--bad)'
+        }
+      }
+
+      async function refresh() {
+        state = await (await fetch(stateUrl)).json()
+        render()
+        return state
+      }
+
+      function escapeAttr(text) {
+        return String(text).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
+      }
+
+      document.getElementById('save').addEventListener('click', async () => {
+        log('保存中…')
+        try {
+          onSaved(await post(saveUrl, values()))
+        } catch (error) {
+          onError(error)
+        }
+      })
+
+      refresh().catch(onError)
+    </script>
+  </body>
+</html>
