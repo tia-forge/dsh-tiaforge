@@ -95,9 +95,12 @@ test('URL 的 Config 字段名唯一，且字段是 volatile（否则设置界�
 })
 
 test('发布包会把 setup 页、lib 与 bin 一起带上', () => {
-  for (const entry of ['index.js', 'cordis.patch.yml', 'skills', 'lib', 'bin', 'assets', 'test']) {
+  for (const entry of ['index.js', 'cordis.patch.yml', 'skills', 'lib', 'bin', 'test', 'assets/setup.html']) {
     assert.ok(pkg.files.includes(entry), `package.json 的 files 少了一项：${entry}`)
   }
+  // 内部投稿草稿不该进公开包
+  assert.equal(pkg.files.some((entry) => entry.includes('awesome')), false, 'files 里混进了内部投稿草稿')
+  assert.equal(pkg.files.includes('assets'), false, 'files 不要整目录带 assets（会把 awesome-* 一起发出去）')
   assert.equal(pkg.bin['dsh-tiaforge-setup'], './bin/setup.mjs')
   assert.ok(fs.existsSync(path.join(root, 'bin/setup.mjs')))
   assert.ok(fs.existsSync(path.join(root, 'assets/setup.html')))

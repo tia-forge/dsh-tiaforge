@@ -1,6 +1,6 @@
 {
   "name": "dsh-tiaforge",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "DSH 博途插件：在 DeepSeek Harness 里接西门子 TIA Portal —— 文档检索、梯形图生成与渲染、PLC 云仿真、本机网关（TiaLink）。带本地配置页（npx dsh-tiaforge-setup）：改 Key/URL 不用重启。",
   "type": "module",
   "main": "index.js",
@@ -10,8 +10,9 @@
     "skills",
     "lib",
     "bin",
-    "assets",
-    "test"
+    "test",
+    "assets/setup.html",
+    "assets/icon-180.png"
   ],
   "bin": {
     "dsh-tiaforge-setup": "./bin/setup.mjs"
